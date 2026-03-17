@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>쿠팡 모니터링 대시보드</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+    h1 { margin-top: 0; }
+    h2 { margin: 24px 0 12px; font-size: 1.1rem; color: #333; }
+    .section { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .cards { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+    .card { flex: 1; min-width: 180px; padding: 16px; background: #fafafa; border-radius: 8px; border: 1px solid #eee; }
+    .card .label { font-size: 0.85rem; color: #666; margin-bottom: 4px; }
+    .card .value { font-size: 1.5rem; font-weight: 600; }
+    .card .pct { font-size: 0.9rem; margin-top: 6px; }
+    .card .pct.up { color: #c62828; }
+    .card .pct.down { color: #1565c0; }
+    .chart-wrap { position: relative; height: 280px; margin-top: 12px; }
+    .toggle-wrap { margin-bottom: 12px; }
+    .toggle-wrap button { padding: 8px 14px; margin-right: 8px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; }
+    .toggle-wrap button.active { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .wau-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .wau-controls button { padding: 8px 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; }
+    .wau-controls .week-label { font-weight: 600; font-size: 1rem; }
+    .wau-value { font-size: 1.8rem; font-weight: 600; color: #1a73e8; margin: 8px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #f5f5f5; font-weight: 600; }
+    a { color: #1a73e8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .loading { color: #888; }
+    .excel-toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding: 12px 0; border-bottom: 1px solid #eee; }
+    .excel-toolbar a.btn, .excel-toolbar button.btn { padding: 8px 14px; border: 1px solid #1a73e8; background: #fff; color: #1a73e8; border-radius: 6px; cursor: pointer; text-decoration: none; font-size: 14px; }
+    .excel-toolbar a.btn:hover, .excel-toolbar button.btn:hover { background: #1a73e8; color: #fff; }
+    .excel-toolbar input[type="file"] { font-size: 13px; }
+    .excel-toolbar .upload-status { font-size: 13px; color: #2e7d32; }
+  </style>
+</head>
+<body>
+  <h1>쿠팡 모니터링 대시보드</h1>
+  <div class="section section-address" style="padding: 12px 20px;">
+    <strong>접속 주소</strong>
+    <span id="current-origin" style="margin-left: 8px;">현재: <code></code></span>
+    <span id="server-urls" style="margin-left: 16px; color: #555;"></span>
+  </div>
+
+  <div class="excel-toolbar">
+    <span><strong>엑셀 다운로드:</strong></span>
+    <a href="/api/excel/download/payment" class="btn" download>결제액 엑셀</a>
+    <a href="/api/excel/download/wau" class="btn" download>WAU 엑셀</a>
+    <span style="margin-left: 12px;"><strong>엑셀 업로드:</strong></span>
+    <label><input type="file" id="upload-payment" accept=".xlsx" style="margin-right: 4px;">결제액</label>
+    <label><input type="file" id="upload-wau" accept=".xlsx" style="margin-right: 4px;">WAU</label>
+    <button type="button" class="btn" id="upload-btn">업로드</button>
+    <span id="upload-status" class="upload-status"></span>
+  </div>
+
+  <div class="section">
+    <h2>1. 쿠팡 일간 결제액 모니터링</h2>
+    <div class="cards" id="payment-cards">
+      <span class="loading">로딩 중...</span>
+    </div>
+    <div class="toggle-wrap">
+      <button type="button" id="view-daily" class="active">일간 (최근 30일)</button>
+      <button type="button" id="view-weekly">주간 평균</button>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart-payment"></canvas>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>2. 쿠팡 WAU (Android+iOS)</h2>
+    <div class="wau-controls">
+      <button type="button" id="wau-prev">이전 주</button>
+      <span class="week-label" id="wau-week-label">-</span>
+      <button type="button" id="wau-next">다음 주</button>
+    </div>
+    <div class="wau-value" id="wau-value">-</div>
+    <div class="chart-wrap">
+      <canvas id="chart-wau"></canvas>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>3. 쿠팡 혜택·와우 멤버십 뉴스 (최근 30일)</h2>
+    <table>
+      <thead>
+        <tr><th>기사제목</th><th>링크</th></tr>
+      </thead>
+      <tbody id="news-tbody">
+        <tr><td colspan="2" class="loading">로딩 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+(function() {
+  const API = '/api';
+  (function showAddress() {
+    var el = document.getElementById('current-origin');
+    if (el) {
+      var code = el.querySelector('code');
+      if (code) code.textContent = window.location.origin;
+    }
+    fetch(API + '/server-info').then(function(r) { return r.json(); }).then(function(info) {
+      var urls = info.urls || [];
+      var el2 = document.getElementById('server-urls');
+      if (el2 && urls.length) {
+        el2.innerHTML = '이 PC 주소(팀원용): ' + urls.map(function(u) {
+          return '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>';
+        }).join(', ');
+      }
+    }).catch(function() {});
+  })();
+  let paymentDaily = [];
+  let paymentWeekly = [];
+  let wauWeekly = [];
+  let wauIndex = 0;
+  let chartPayment = null;
+  let chartWau = null;
+  let paymentViewMode = 'daily'; // 'daily' | 'weekly'
+
+  function formatNum(v) {
+    if (v == null || v === '' || isNaN(v)) return '-';
+    if (v >= 1e8) return (v / 1e8).toFixed(1) + '억';
+    if (v >= 1e4) return (v / 1e4).toFixed(1) + '만';
+    return Number(v).toLocaleString();
+  }
+  function formatPct(v) {
+    if (v == null || v === '' || isNaN(v)) return '';
+    const s = Number(v).toFixed(1) + '%';
+    return v >= 0 ? '↑ ' + s : '↓ ' + s.replace('-', '');
+  }
+
+  async function fetchPaymentDaily(days = 84) {
+    const r = await fetch(API + '/payment/daily?days=' + days);
+    const j = await r.json();
+    return j.data || [];
+  }
+  async function fetchPaymentWeekly() {
+    const r = await fetch(API + '/payment/weekly');
+    const j = await r.json();
+    return j.data || [];
+  }
+  async function fetchWauWeekly() {
+    const r = await fetch(API + '/wau/weekly');
+    const j = await r.json();
+    return j.data || [];
+  }
+  async function fetchNews() {
+    const r = await fetch(API + '/news');
+    const j = await r.json();
+    return { data: j.data || [], message: j.message || '' };
+  }
+
+  function renderPaymentCards(data) {
+    if (!data || data.length === 0) {
+      document.getElementById('payment-cards').innerHTML = '<span class="loading">데이터 없음</span>';
+      return;
+    }
+    const last = data[data.length - 1];
+    const html = `
+      <div class="card">
+        <div class="label">순 결제금액 (최신일: ${last.date})</div>
+        <div class="value">${formatNum(last.순_결제금액_원)} 원</div>
+        <div class="pct ${last.순_결제금액_전일대비 != null && last.순_결제금액_전일대비 >= 0 ? 'up' : 'down'}">${formatPct(last.순_결제금액_전일대비) || '-'}</div>
+      </div>
+      <div class="card">
+        <div class="label">총 결제횟수</div>
+        <div class="value">${formatNum(last.총_결제횟수)} 회</div>
+        <div class="pct ${last.총_결제횟수_전일대비 != null && last.총_결제횟수_전일대비 >= 0 ? 'up' : 'down'}">${formatPct(last.총_결제횟수_전일대비) || '-'}</div>
+      </div>
+      <div class="card">
+        <div class="label">총 결제자</div>
+        <div class="value">${formatNum(last.총_결제자_명)} 명</div>
+        <div class="pct ${last.총_결제자_전일대비 != null && last.총_결제자_전일대비 >= 0 ? 'up' : 'down'}">${formatPct(last.총_결제자_전일대비) || '-'}</div>
+      </div>
+    `;
+    document.getElementById('payment-cards').innerHTML = html;
+  }
+
+  function groupByWeek(data) {
+    const map = {};
+    data.forEach(row => {
+      const w = row.week_label || row.date;
+      if (!map[w]) map[w] = { labels: [], 순_결제금액_원: [], 총_결제횟수: [], 총_결제자_명: [] };
+      map[w].순_결제금액_원.push(row.순_결제금액_원);
+      map[w].총_결제횟수.push(row.총_결제횟수);
+      map[w].총_결제자_명.push(row.총_결제자_명);
+    });
+    const labels = Object.keys(map).sort();
+    return labels.map(l => {
+      const g = map[l];
+      const n = g.순_결제금액_원.length;
+      return {
+        week_label: l,
+        순_결제금액_원: g.순_결제금액_원.reduce((a,b)=>a+b,0)/n,
+        총_결제횟수: g.총_결제횟수.reduce((a,b)=>a+b,0)/n,
+        총_결제자_명: g.총_결제자_명.reduce((a,b)=>a+b,0)/n
+      };
+    });
+  }
+
+  function renderPaymentChart() {
+    const ctx = document.getElementById('chart-payment').getContext('2d');
+    if (chartPayment) chartPayment.destroy();
+
+    let labels = [];
+    let dataAmount = [];
+    let dataCount = [];
+    let dataUsers = [];
+
+    if (paymentViewMode === 'daily' && paymentDaily.length) {
+      const daily30 = paymentDaily.slice(-30);
+      labels = daily30.map(r => r.date);
+      dataAmount = daily30.map(r => r.순_결제금액_원);
+      dataCount = daily30.map(r => r.총_결제횟수);
+      dataUsers = daily30.map(r => r.총_결제자_명);
+    } else if (paymentViewMode === 'weekly' && paymentDaily.length) {
+      const weekly = groupByWeek(paymentDaily).slice(-12);
+      labels = weekly.map(r => r.week_label);
+      dataAmount = weekly.map(r => r.순_결제금액_원);
+      dataCount = weekly.map(r => r.총_결제횟수);
+      dataUsers = weekly.map(r => r.총_결제자_명);
+    }
+
+    chartPayment = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: '순 결제금액(원)', data: dataAmount, borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,0.1)', fill: true, yAxisID: 'y' },
+          { label: '총 결제횟수', data: dataCount, borderColor: '#2e7d32', backgroundColor: 'rgba(46,125,50,0.1)', fill: true, yAxisID: 'y1' },
+          { label: '총 결제자(명)', data: dataUsers, borderColor: '#6a1b9a', backgroundColor: 'rgba(106,27,154,0.1)', fill: true, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          y: { type: 'linear', display: true, position: 'left', title: { display: true, text: '순 결제금액(원)' } },
+          y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '결제횟수/결제자' } }
+        }
+      }
+    });
+  }
+
+  function renderWau() {
+    if (!wauWeekly.length) {
+      document.getElementById('wau-week-label').textContent = '-';
+      document.getElementById('wau-value').textContent = '-';
+      return;
+    }
+    wauIndex = Math.max(0, Math.min(wauIndex, wauWeekly.length - 1));
+    const row = wauWeekly[wauIndex];
+    document.getElementById('wau-week-label').textContent = row.week_label || row.week_start || '-';
+    document.getElementById('wau-value').textContent = row.active_users_만 != null ? formatNum(row.active_users_만 * 10000) + ' 명' : '-';
+  }
+
+  function renderWauChart() {
+    const ctx = document.getElementById('chart-wau').getContext('2d');
+    if (chartWau) chartWau.destroy();
+    const recent = wauWeekly.slice(-12);
+    const values = recent.map(r => r.active_users_만).filter(v => v != null && !isNaN(v));
+    const dataMin = values.length ? Math.min(...values) : 0;
+    const dataMax = values.length ? Math.max(...values) : 3000;
+    const padding = Math.max(50, (dataMax - dataMin) * 0.1) || 50;
+    const yMin = Math.floor(dataMin - padding);
+    const yMax = Math.ceil(Math.max(dataMax + padding, 3200));
+    chartWau = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: recent.map(r => r.week_label || r.week_start),
+        datasets: [{ label: 'WAU(Android+iOS, 만 명)', data: recent.map(r => r.active_users_만), backgroundColor: 'rgba(26,115,232,0.6)' }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: false,
+            min: yMin < 0 ? 0 : yMin,
+            max: yMax,
+            title: { display: true, text: 'WAU(만 명)' }
+          }
+        }
+      }
+    });
+  }
+
+  function renderNews(rows, message) {
+    const tbody = document.getElementById('news-tbody');
+    if (!rows || rows.length === 0) {
+      const msg = message || '쿠팡 혜택 변경·와우 멤버십 관련 뉴스를 보려면 config.yaml에 네이버 검색 API(애플리케이션 등록) client_id, client_secret을 설정하세요.';
+      tbody.innerHTML = '<tr><td colspan="2" class="loading">' + escapeHtml(msg) + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.title || '')}</td>
+        <td><a href="${escapeHtml(r.link || '#')}" target="_blank" rel="noopener">${escapeHtml(r.link || '')}</a></td>
+      </tr>
+    `).join('');
+  }
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  document.getElementById('view-daily').onclick = function() {
+    paymentViewMode = 'daily';
+    document.getElementById('view-daily').classList.add('active');
+    document.getElementById('view-weekly').classList.remove('active');
+    renderPaymentChart();
+  };
+  document.getElementById('view-weekly').onclick = function() {
+    paymentViewMode = 'weekly';
+    document.getElementById('view-weekly').classList.add('active');
+    document.getElementById('view-daily').classList.remove('active');
+    renderPaymentChart();
+  };
+  document.getElementById('wau-prev').onclick = function() {
+    wauIndex--;
+    renderWau();
+  };
+  document.getElementById('wau-next').onclick = function() {
+    wauIndex++;
+    renderWau();
+  };
+
+  document.getElementById('upload-btn').onclick = async function() {
+    const paymentInput = document.getElementById('upload-payment');
+    const wauInput = document.getElementById('upload-wau');
+    const statusEl = document.getElementById('upload-status');
+    statusEl.textContent = '';
+    const form = new FormData();
+    if (paymentInput.files && paymentInput.files[0]) form.append('payment', paymentInput.files[0]);
+    if (wauInput.files && wauInput.files[0]) form.append('wau', wauInput.files[0]);
+    if (!form.has('payment') && !form.has('wau')) {
+      statusEl.textContent = '결제액 또는 WAU 엑셀 파일을 선택하세요.';
+      return;
+    }
+    try {
+      const r = await fetch(API + '/excel/upload', { method: 'POST', body: form });
+      const j = await r.json();
+      if (r.ok && j.ok) {
+        statusEl.textContent = '저장됨: ' + (j.saved && j.saved.length ? j.saved.join(', ') : '');
+        paymentInput.value = '';
+        wauInput.value = '';
+        load();
+      } else {
+        statusEl.textContent = j.error || '업로드 실패';
+      }
+    } catch (e) {
+      statusEl.textContent = '업로드 실패';
+    }
+  };
+
+  async function load() {
+    try {
+      [paymentDaily, paymentWeekly, wauWeekly] = await Promise.all([
+        fetchPaymentDaily(84),
+        fetchPaymentWeekly(),
+        fetchWauWeekly()
+      ]);
+      renderPaymentCards(paymentDaily);
+      renderPaymentChart();
+      wauIndex = wauWeekly.length - 1;
+      renderWau();
+      renderWauChart();
+      const newsRes = await fetchNews();
+      renderNews(newsRes.data, newsRes.message);
+    } catch (e) {
+      console.error(e);
+      document.getElementById('payment-cards').innerHTML = '<span class="loading">데이터 로드 실패</span>';
+      document.getElementById('news-tbody').innerHTML = '<tr><td colspan="2" class="loading">로드 실패</td></tr>';
+    }
+  }
+  load();
+})();
+  </script>
+</body>
+</html>

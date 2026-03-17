@@ -1,0 +1,8 @@
+# config.yaml (config.example.yaml 내용 반영)
+
+naver_search:
+  client_id: 'LMeJBlkRuXAJ82cv7gcz'
+  client_secret: 'n_IXdooO1z'
+
+confluence:
+  space_key: 'PLAN'  # 위키에 올릴 게시판 이름 (예: PLAN)
