@@ -11,12 +11,16 @@ import pandas as pd
 
 # 결제액 엑셀: 시트 '주요지표', 헤더 5행(0-indexed), 데이터 6행부터.
 # 컬럼 0=기간, 1=순 결제금액(원), 4=총 결제횟수(회), 5=총 결제자(명)
+# WoW: 10=순 결제금액 성장비율(%), 13=총 결제횟수 성장비율(%), 14=총 결제자 성장비율(%)
 PAYMENT_SHEET = "주요지표"
 PAYMENT_HEADER_ROW = 5
 PAYMENT_DATE_COL = 0
 PAYMENT_AMOUNT_COL = 1
 PAYMENT_COUNT_COL = 4   # 총 결제횟수(회)
-PAYMENT_USERS_COL = 5  # 총 결제자(명)
+PAYMENT_USERS_COL = 5   # 총 결제자(명)
+PAYMENT_WOW_AMOUNT_COL = 10
+PAYMENT_WOW_COUNT_COL = 13
+PAYMENT_WOW_USERS_COL = 14
 
 # WAU 엑셀: 첫 시트, 헤더 행에 'Android+IOS 사용자 수', '날짜' 포함. 데이터는 그 다음 행부터
 WAU_DATE_COL_NAME = "날짜"
@@ -29,6 +33,19 @@ def _to_numeric(s):
     if isinstance(s, (int, float)):
         return float(s) if not pd.isna(s) else None
     s = str(s).strip().replace(",", "")
+    if not s or s in ("-", "nan", ""):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_pct(s):
+    """'+5.9%', '-7.9%' 등 → 5.9, -7.9. 파싱 실패 시 None."""
+    if s is None or (isinstance(s, float) and pd.isna(s)):
+        return None
+    s = str(s).strip().replace("%", "").replace(",", "")
     if not s or s in ("-", "nan", ""):
         return None
     try:
@@ -50,42 +67,34 @@ def _week_label(week_start_str: str) -> str:
 
 def load_payment_daily_from_excel(path: Path, days: int = 30) -> pd.DataFrame:
     """
-    일간 결제 raw 로드: 일자, 순 결제금액, 총 결제횟수, 총 결제자, 직전일 대비 증가율(3지표).
+    일간 결제 raw 로드: 일자, 순 결제금액, 총 결제횟수, 총 결제자, WoW(전주대비, 엑셀 Col 10,13,14).
     최근 days 일만 반환.
     """
+    cols = [
+        "date", "순_결제금액_원", "총_결제횟수", "총_결제자_명",
+        "순_결제금액_WoW", "총_결제횟수_WoW", "총_결제자_WoW"
+    ]
     if not path.exists():
-        return pd.DataFrame(columns=[
-            "date", "순_결제금액_원", "총_결제횟수", "총_결제자_명",
-            "순_결제금액_전일대비", "총_결제횟수_전일대비", "총_결제자_전일대비"
-        ])
+        return pd.DataFrame(columns=cols)
 
     df = pd.read_excel(path, sheet_name=PAYMENT_SHEET, header=None)
     if df.shape[0] <= PAYMENT_HEADER_ROW:
-        return pd.DataFrame(columns=[
-            "date", "순_결제금액_원", "총_결제횟수", "총_결제자_명",
-            "순_결제금액_전일대비", "총_결제횟수_전일대비", "총_결제자_전일대비"
-        ])
+        return pd.DataFrame(columns=cols)
 
-    data = df.iloc[PAYMENT_HEADER_ROW:, [PAYMENT_DATE_COL, PAYMENT_AMOUNT_COL, PAYMENT_COUNT_COL, PAYMENT_USERS_COL]].copy()
-    data.columns = ["date", "순_결제금액_원", "총_결제횟수", "총_결제자_명"]
+    col_indices = [PAYMENT_DATE_COL, PAYMENT_AMOUNT_COL, PAYMENT_COUNT_COL, PAYMENT_USERS_COL,
+                   PAYMENT_WOW_AMOUNT_COL, PAYMENT_WOW_COUNT_COL, PAYMENT_WOW_USERS_COL]
+    data = df.iloc[PAYMENT_HEADER_ROW:, col_indices].copy()
+    data.columns = cols
     data["date"] = pd.to_datetime(data["date"], errors="coerce")
     data = data.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
     for c in ["순_결제금액_원", "총_결제횟수", "총_결제자_명"]:
         data[c] = data[c].apply(_to_numeric)
     data = data.dropna(subset=["순_결제금액_원", "총_결제횟수", "총_결제자_명"])
 
+    for c in ["순_결제금액_WoW", "총_결제횟수_WoW", "총_결제자_WoW"]:
+        data[c] = data[c].apply(_parse_pct)
+
     data = data.tail(days).reset_index(drop=True)
-
-    for col, pct_col in [
-        ("순_결제금액_원", "순_결제금액_전일대비"),
-        ("총_결제횟수", "총_결제횟수_전일대비"),
-        ("총_결제자_명", "총_결제자_전일대비"),
-    ]:
-        prev = data[col].shift(1)
-        data[pct_col] = None
-        mask = prev.notna() & (prev != 0)
-        data.loc[mask, pct_col] = ((data.loc[mask, col] - prev[mask]) / prev[mask] * 100).round(2)
-
     data["date"] = data["date"].dt.strftime("%Y-%m-%d")
     return data
 

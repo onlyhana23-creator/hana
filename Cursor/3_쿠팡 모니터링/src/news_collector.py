@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """쿠팡 관련 뉴스 수집 (네이버 뉴스 검색 API)."""
 import os
+import re
+import html
 import json
+from urllib.parse import urlparse
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -9,9 +12,40 @@ import requests
 
 NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json"
 RECENT30D_CACHE_FILE = "coupang_news_recent30d.json"
+RECENT2W_CACHE_FILE = "coupang_news_recent2w.json"
 
 # 쿠팡 혜택·와우 멤버십 관련만 포함 (최소 하나 포함)
 INCLUDE_KEYWORDS = ("혜택", "멤버십", "와우", "변경", "개편", "조정", "무료배송", "회원혜택")
+
+
+def _strip_html(text):
+    """HTML 태그 제거 후 html.unescape 적용."""
+    if not text or not isinstance(text, str):
+        return ""
+    s = re.sub(r"<[^>]+>", "", text.strip())
+    return html.unescape(s).strip()
+
+
+def _normalize_url(url):
+    """URL 정규화: trailing slash 제거 후 scheme+netloc+path만 사용, 중복 비교용 키 반환."""
+    if not url or not isinstance(url, str):
+        return ""
+    s = url.strip()
+    s = s.rstrip("/")
+    try:
+        p = urlparse(s)
+        base = f"{p.scheme}://{p.netloc}{p.path}" if p.scheme and p.netloc else s
+        return base.lower()
+    except Exception:
+        return s.lower()
+
+
+def _normalize_title(title):
+    """제목 정규화: 공백·특수문자 정리 후 중복 비교용 키 반환."""
+    if not title or not isinstance(title, str):
+        return ""
+    s = re.sub(r"\s+", " ", title.strip())
+    return s[:100] if len(s) > 100 else s
 
 
 def fetch_naver_news(query: str, client_id: str, client_secret: str, display: int = 20, sort: str = "date"):
@@ -169,6 +203,93 @@ def collect_coupang_news_recent_30d(config: dict, cache_dir: Path):
         else:
             seen_title.add(t)
         unique.append({"title": t, "link": link or x.get("link"), "description": (x.get("description") or "").strip(), "pubDate": x.get("pubDate")})
+
+    result = {"collected_at": datetime.now().isoformat(), "items": unique[:50]}
+    if use_fallback and result["items"]:
+        result["message"] = "혜택·와우 멤버십 관련 기사가 없어 최근 쿠팡 뉴스를 표시합니다."
+    try:
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return result
+
+
+def collect_coupang_news_recent_2w(config: dict, cache_dir: Path):
+    """
+    최근 2주 간 쿠팡 관련 뉴스 수집.
+    HTML 태그 제거, URL/제목 정규화로 중복 제거, 날짜 YYYY-MM-DD 포맷.
+    """
+    naver = config.get("naver_search") or {}
+    cid = naver.get("client_id") or os.getenv("NAVER_CLIENT_ID")
+    csec = naver.get("client_secret") or os.getenv("NAVER_CLIENT_SECRET")
+    cache_dir = Path(cache_dir)
+    if os.environ.get("VERCEL"):
+        cache_dir = Path("/tmp/news_cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / RECENT2W_CACHE_FILE
+
+    if not cid or not csec:
+        return {"items": [], "message": "config.yaml에 네이버 검색 API client_id, client_secret을 설정하면 최근 2주 뉴스가 표시됩니다."}
+
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            collected = datetime.fromisoformat(data.get("collected_at", "2000-01-01"))
+            if (datetime.now() - collected).total_seconds() < 3600:
+                return data
+        except Exception:
+            pass
+
+    raw_items = []
+    try:
+        for q in ["쿠팡 혜택 변경", "와우 멤버십", "쿠팡 와우 혜택", "쿠팡 멤버십 변경", "쿠팡 회원 혜택"]:
+            raw_items.extend(fetch_naver_news(q, cid, csec, display=50, sort="date"))
+    except Exception as e:
+        return {"items": [], "message": "뉴스 API 오류: " + str(e)}
+
+    items = _filter_benefit_membership_only(raw_items)
+    use_fallback = len(items) == 0
+    if use_fallback:
+        items = raw_items
+
+    cutoff = (datetime.now() - timedelta(days=14)).date()
+    seen_url = set()
+    seen_title = set()
+    unique = []
+    for x in items:
+        raw_link = (x.get("link") or "").strip()
+        raw_title = (x.get("title") or "").strip()
+        raw_desc = (x.get("description") or "").strip()
+        title = _strip_html(raw_title)
+        desc = _strip_html(raw_desc)
+        link = _strip_html(raw_link) or raw_link
+        url_key = _normalize_url(link)
+        title_key = _normalize_title(title) if title else ""
+        pub = _parse_pubdate(x.get("pubDate"))
+        if pub is not None:
+            pub_date = pub.date() if hasattr(pub, "date") else pub
+            if hasattr(pub_date, "year") and pub_date < cutoff:
+                continue
+        if not title and not link:
+            continue
+        if url_key and url_key in seen_url:
+            continue
+        if title_key and title_key in seen_title:
+            continue
+        if url_key:
+            seen_url.add(url_key)
+        if title_key:
+            seen_title.add(title_key)
+        date_str = pub.strftime("%Y-%m-%d") if pub else ""
+        unique.append({
+            "title": title,
+            "link": link or x.get("link"),
+            "description": desc,
+            "pubDate": x.get("pubDate"),
+            "date": date_str,
+        })
 
     result = {"collected_at": datetime.now().isoformat(), "items": unique[:50]}
     if use_fallback and result["items"]:

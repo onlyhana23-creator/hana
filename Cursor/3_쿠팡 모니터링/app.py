@@ -21,7 +21,7 @@ from src.excel_loader import (
     load_payment_df,
     load_wau_df,
 )
-from src.news_collector import collect_coupang_news, collect_coupang_news_recent_30d
+from src.news_collector import collect_coupang_news, collect_coupang_news_recent_2w
 from models import db
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -111,9 +111,9 @@ def api_payment_daily():
             "순_결제금액_원": r["순_결제금액_원"],
             "총_결제횟수": r["총_결제횟수"],
             "총_결제자_명": r["총_결제자_명"],
-            "순_결제금액_전일대비": r.get("순_결제금액_전일대비"),
-            "총_결제횟수_전일대비": r.get("총_결제횟수_전일대비"),
-            "총_결제자_전일대비": r.get("총_결제자_전일대비"),
+            "순_결제금액_WoW": r.get("순_결제금액_WoW"),
+            "총_결제횟수_WoW": r.get("총_결제횟수_WoW"),
+            "총_결제자_WoW": r.get("총_결제자_WoW"),
         })
     return jsonify({"data": rows})
 
@@ -152,12 +152,12 @@ def api_wau_weekly():
 
 @app.route("/api/news")
 def api_news():
-    """최근 30일 쿠팡 뉴스 (URL/제목 기준 중복 제거). 기사제목, 링크."""
+    """최근 2주 쿠팡 뉴스 (URL/제목 기준 중복 제거, HTML 제거). 날짜, 기사제목, 링크."""
     config = load_config()
     paths = _get_paths()
-    result = collect_coupang_news_recent_30d(config, paths["news_cache_dir"])
+    result = collect_coupang_news_recent_2w(config, paths["news_cache_dir"])
     items = result.get("items", [])
-    rows = [{"title": x.get("title", ""), "link": x.get("link", "")} for x in items]
+    rows = [{"title": x.get("title", ""), "link": x.get("link", ""), "date": x.get("date", "")} for x in items]
     out = {"data": rows}
     if result.get("message"):
         out["message"] = result["message"]

@@ -81,13 +81,13 @@
   </div>
 
   <div class="section">
-    <h2>3. 쿠팡 혜택·와우 멤버십 뉴스 (최근 30일)</h2>
+    <h2>3. 쿠팡 혜택·와우 멤버십 뉴스 (최근 2주)</h2>
     <table>
       <thead>
-        <tr><th>기사제목</th><th>링크</th></tr>
+        <tr><th>날짜</th><th>기사제목</th><th>링크</th></tr>
       </thead>
       <tbody id="news-tbody">
-        <tr><td colspan="2" class="loading">로딩 중...</td></tr>
+        <tr><td colspan="3" class="loading">로딩 중...</td></tr>
       </tbody>
     </table>
   </div>
@@ -109,10 +109,11 @@
     if (v >= 1e4) return (v / 1e4).toFixed(1) + '만';
     return Number(v).toLocaleString();
   }
-  function formatPct(v) {
+  function formatWow(v) {
     if (v == null || v === '' || isNaN(v)) return '';
-    const s = Number(v).toFixed(1) + '%';
-    return v >= 0 ? '↑ ' + s : '↓ ' + s.replace('-', '');
+    const s = Number(v).toFixed(2) + '%';
+    const sign = v >= 0 ? '+' : '';
+    return 'WOW ' + sign + s;
   }
 
   async function fetchPaymentDaily(days = 84) {
@@ -146,17 +147,17 @@
       <div class="card">
         <div class="label">순 결제금액 (최신일: ${last.date})</div>
         <div class="value">${formatNum(last.순_결제금액_원)} 원</div>
-        <div class="pct ${last.순_결제금액_전일대비 != null && last.순_결제금액_전일대비 >= 0 ? 'up' : 'down'}">${formatPct(last.순_결제금액_전일대비) || '-'}</div>
+        <div class="pct ${last.순_결제금액_WoW != null && last.순_결제금액_WoW >= 0 ? 'up' : 'down'}">${formatWow(last.순_결제금액_WoW) || '-'}</div>
       </div>
       <div class="card">
         <div class="label">총 결제횟수</div>
         <div class="value">${formatNum(last.총_결제횟수)} 회</div>
-        <div class="pct ${last.총_결제횟수_전일대비 != null && last.총_결제횟수_전일대비 >= 0 ? 'up' : 'down'}">${formatPct(last.총_결제횟수_전일대비) || '-'}</div>
+        <div class="pct ${last.총_결제횟수_WoW != null && last.총_결제횟수_WoW >= 0 ? 'up' : 'down'}">${formatWow(last.총_결제횟수_WoW) || '-'}</div>
       </div>
       <div class="card">
         <div class="label">총 결제자</div>
         <div class="value">${formatNum(last.총_결제자_명)} 명</div>
-        <div class="pct ${last.총_결제자_전일대비 != null && last.총_결제자_전일대비 >= 0 ? 'up' : 'down'}">${formatPct(last.총_결제자_전일대비) || '-'}</div>
+        <div class="pct ${last.총_결제자_WoW != null && last.총_결제자_WoW >= 0 ? 'up' : 'down'}">${formatWow(last.총_결제자_WoW) || '-'}</div>
       </div>
     `;
     document.getElementById('payment-cards').innerHTML = html;
@@ -276,13 +277,14 @@
     const tbody = document.getElementById('news-tbody');
     if (!rows || rows.length === 0) {
       const msg = message || '쿠팡 혜택 변경·와우 멤버십 관련 뉴스를 보려면 config.yaml에 네이버 검색 API(애플리케이션 등록) client_id, client_secret을 설정하세요.';
-      tbody.innerHTML = '<tr><td colspan="2" class="loading">' + escapeHtml(msg) + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="loading">' + escapeHtml(msg) + '</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(r => `
       <tr>
+        <td>${escapeHtml(r.date || '')}</td>
         <td>${escapeHtml(r.title || '')}</td>
-        <td><a href="${escapeHtml(r.link || '#')}" target="_blank" rel="noopener">${escapeHtml(r.link || '')}</a></td>
+        <td><a href="${escapeHtml(r.link || '#')}" target="_blank" rel="noopener">바로가기</a></td>
       </tr>
     `).join('');
   }
@@ -358,7 +360,7 @@
     } catch (e) {
       console.error(e);
       document.getElementById('payment-cards').innerHTML = '';
-      document.getElementById('news-tbody').innerHTML = '<tr><td colspan="2" class="loading"></td></tr>';
+      document.getElementById('news-tbody').innerHTML = '<tr><td colspan="3" class="loading"></td></tr>';
     }
   }
   load();
