@@ -71,7 +71,9 @@ def _week_label(week_start_str: str) -> str:
 
 def load_payment_daily_from_excel(path: Path, days: int = 30) -> pd.DataFrame:
     """
-    일간 결제 raw 로드: 일자, 순 결제금액, 총 결제횟수, 총 결제자, WoW(전주대비, 엑셀 Col 10,13,14).
+    일간 결제 raw 로드: 일자, 순 결제금액, 총 결제횟수, 총 결제자, WoW(전주대비).
+    WoW는 순 결제금액/총 결제횟수/총 결제자 각각 P(15), Q(16), R(17) 열에서 가져옴.
+    모든 지표(금액·횟수·결제자·WoW)는 최신일(맨 아래 행) 기준으로 표시됨.
     최근 days 일만 반환.
     """
     cols = [
@@ -100,6 +102,7 @@ def load_payment_daily_from_excel(path: Path, days: int = 30) -> pd.DataFrame:
 
     data = data.tail(days).reset_index(drop=True)
     data["date"] = data["date"].dt.strftime("%Y-%m-%d")
+    # 반환 시 마지막 행 = 최신일 → 대시보드 카드에 최신일 기준 모든 지표(WoW 포함) 표시
     return data
 
 

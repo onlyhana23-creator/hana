@@ -142,7 +142,7 @@
       document.getElementById('payment-cards').innerHTML = '';
       return;
     }
-    const last = data[data.length - 1];
+    const last = data[data.length - 1];  // 최신일(맨 아래 행) 기준: 금액·횟수·결제자·WoW
     const html = `
       <div class="card">
         <div class="label">순 결제금액 (최신일: ${last.date})</div>

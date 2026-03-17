@@ -2,26 +2,31 @@
 
 코드를 수정한 뒤 GitHub에 푸시하면, Vercel이 자동으로 새 배포를 진행합니다.
 
+> **참고**: Git 루트가 `/Users/user` 이므로, `git add` 시 프로젝트 경로를 포함해야 합니다.
+
 ---
 
 ## 1. 기본 배포 흐름 (터미널)
 
-프로젝트 폴더로 이동한 뒤 아래 명령어를 순서대로 실행합니다.
-
 ```bash
-cd "/Users/user/Cursor/3_쿠팡 모니터링"
+cd /Users/user
 ```
 
 ```bash
-git add .
+git add "Cursor/3_쿠팡 모니터링/src/excel_loader.py" "Cursor/3_쿠팡 모니터링/templates/dashboard.html" "Cursor/3_쿠팡 모니터링/GIT_PUSH_가이드.md"
 ```
 
 ```bash
-git commit -m "변경 내용 요약"
+git commit -m "WoW 최신일(맨 아래 행) 기준 표시, 주석 보완"
 ```
 
 ```bash
 git push origin main
+```
+
+**한 번에 실행:**
+```bash
+cd /Users/user && git add "Cursor/3_쿠팡 모니터링/src/excel_loader.py" "Cursor/3_쿠팡 모니터링/templates/dashboard.html" "Cursor/3_쿠팡 모니터링/GIT_PUSH_가이드.md" && git commit -m "WoW 최신일(맨 아래 행) 기준 표시, 주석 보완" && git push origin main
 ```
 
 > **커밋 메시지 예시**
