@@ -26,9 +26,6 @@
     .wau-controls button { padding: 8px 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; }
     .wau-controls .week-label { font-weight: 600; font-size: 1rem; }
     .wau-value { font-size: 1.8rem; font-weight: 600; color: #1a73e8; margin: 8px 0; }
-    .wau-wow { font-size: 0.9rem; margin-top: 6px; }
-    .wau-wow.up { color: #c62828; }
-    .wau-wow.down { color: #1565c0; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; }
     th { background: #f5f5f5; font-weight: 600; }
@@ -78,7 +75,6 @@
       <button type="button" id="wau-next">다음 주</button>
     </div>
     <div class="wau-value" id="wau-value">-</div>
-    <div class="wau-wow pct" id="wau-wow"></div>
     <div class="chart-wrap">
       <canvas id="chart-wau"></canvas>
     </div>
@@ -238,17 +234,12 @@
     if (!wauWeekly.length) {
       document.getElementById('wau-week-label').textContent = '-';
       document.getElementById('wau-value').textContent = '-';
-      document.getElementById('wau-wow').textContent = '';
-      document.getElementById('wau-wow').className = 'wau-wow pct';
       return;
     }
     wauIndex = Math.max(0, Math.min(wauIndex, wauWeekly.length - 1));
     const row = wauWeekly[wauIndex];
     document.getElementById('wau-week-label').textContent = row.week_label || row.week_start || '-';
     document.getElementById('wau-value').textContent = row.active_users_만 != null ? formatNum(row.active_users_만 * 10000) + ' 명' : '-';
-    const wowEl = document.getElementById('wau-wow');
-    wowEl.textContent = formatWow(row.wau_wow) || '';
-    wowEl.className = 'wau-wow pct ' + (row.wau_wow != null && row.wau_wow >= 0 ? 'up' : 'down');
   }
 
   function renderWauChart() {
@@ -265,29 +256,17 @@
       type: 'bar',
       data: {
         labels: recent.map(r => r.week_label || r.week_start),
-        datasets: [
-          { type: 'bar', label: 'WAU(Android+iOS, 만 명)', data: recent.map(r => r.active_users_만), backgroundColor: 'rgba(26,115,232,0.6)', yAxisID: 'y' },
-          { type: 'line', label: 'WAU WoW(%)', data: recent.map(r => r.wau_wow), yAxisID: 'y1', borderColor: '#2e7d32', backgroundColor: 'transparent', fill: false, tension: 0.3 }
-        ]
+        datasets: [{ label: 'WAU(Android+iOS, 만 명)', data: recent.map(r => r.active_users_만), backgroundColor: 'rgba(26,115,232,0.6)' }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
         scales: {
           y: {
-            type: 'linear',
-            position: 'left',
             beginAtZero: false,
             min: yMin < 0 ? 0 : yMin,
             max: yMax,
             title: { display: true, text: 'WAU(만 명)' }
-          },
-          y1: {
-            type: 'linear',
-            position: 'right',
-            grid: { drawOnChartArea: false },
-            title: { display: true, text: 'WoW(%)' }
           }
         }
       }

@@ -22,10 +22,9 @@ PAYMENT_WOW_AMOUNT_COL = 15
 PAYMENT_WOW_COUNT_COL = 16
 PAYMENT_WOW_USERS_COL = 17
 
-# WAU 엑셀: 첫 시트, 헤더 행에 '날짜', 'Android+IOS 사용자(수)', 'WoW' 포함
+# WAU 엑셀: 첫 시트, 헤더 행에 'Android+IOS 사용자 수', '날짜' 포함. 데이터는 그 다음 행부터
 WAU_DATE_COL_NAME = "날짜"
-WAU_ANDROID_IOS_COL_NAMES = ("Android+IOS 사용자 수", "Android+IOS 사용자")
-WAU_WOW_COL_NAME = "WoW"
+WAU_ANDROID_IOS_COL_NAME = "Android+IOS 사용자 수"
 
 
 def _to_numeric(s):
@@ -143,47 +142,40 @@ def load_payment_from_excel(path: Path) -> pd.DataFrame:
 def load_wau_from_excel(path: Path) -> pd.DataFrame:
     """
     '쿠팡 WAU 모니터링.xlsx' 로드.
-    Android+IOS 사용자 수, WoW(F열) 사용. 헤더에서 '날짜', 'Android+IOS 사용자', 'WoW' 찾기.
+    Android+IOS 사용자 수만 사용. 시트는 첫 번째 시트, 헤더 행에서 '날짜', 'Android+IOS 사용자 수' 컬럼 찾기.
     """
-    cols_out = ["year_week", "week_start", "week_label", "active_users_만", "wau_wow", "note"]
     if not path.exists():
-        return pd.DataFrame(columns=cols_out)
+        return pd.DataFrame(columns=["year_week", "week_start", "week_label", "active_users_만", "note"])
 
     xl = pd.ExcelFile(path)
     sheet = xl.sheet_names[0]
     df = pd.read_excel(path, sheet_name=sheet, header=None)
 
+    # 헤더 행 찾기 (날짜, Android+IOS 사용자 수 포함된 행)
     header_row = None
     date_col = None
     aios_col = None
-    wow_col = None
     for r in range(min(15, len(df))):
         row = df.iloc[r]
         for c in range(len(row)):
             v = str(row.iloc[c]).strip() if pd.notna(row.iloc[c]) else ""
             if v == WAU_DATE_COL_NAME:
                 date_col = c
-            if v in WAU_ANDROID_IOS_COL_NAMES:
+            if v == WAU_ANDROID_IOS_COL_NAME:
                 aios_col = c
-            if v == WAU_WOW_COL_NAME:
-                wow_col = c
         if date_col is not None and aios_col is not None:
             header_row = r
             break
 
     if header_row is None or date_col is None or aios_col is None:
-        return pd.DataFrame(columns=cols_out)
+        return pd.DataFrame(columns=["year_week", "week_start", "week_label", "active_users_만", "note"])
 
-    col_indices = [date_col, aios_col]
-    if wow_col is not None:
-        col_indices.append(wow_col)
-    data = df.iloc[header_row + 1 :, col_indices].copy()
+    data = df.iloc[header_row + 1 :, [date_col, aios_col]].copy()
     data = data.rename(columns={data.columns[0]: "date_str", data.columns[1]: "users"})
-    if wow_col is not None:
-        data = data.rename(columns={data.columns[2]: "wau_wow_raw"})
     data["users"] = data["users"].apply(_to_numeric)
     data = data.dropna(subset=["users"])
 
+    # 날짜 파싱: "2025-06-30 ~ 2025-07-06" → 주 시작일 2025-06-30
     def parse_week_start(s):
         if pd.isna(s):
             return None
@@ -198,14 +190,9 @@ def load_wau_from_excel(path: Path) -> pd.DataFrame:
     data["year_week"] = pd.to_datetime(data["week_start"]).dt.strftime("%Y-%W").str.replace("-W", "-", regex=False)
     data["week_label"] = data["week_start"].apply(_week_label)
     data["active_users_만"] = (data["users"] / 10_000).round(1)
-    if "wau_wow_raw" in data.columns:
-        data["wau_wow"] = data["wau_wow_raw"].apply(_parse_pct)
-    else:
-        data["wau_wow"] = None
     data["note"] = ""
 
-    out_cols = ["year_week", "week_start", "week_label", "active_users_만", "wau_wow", "note"]
-    out = data[out_cols].drop_duplicates(subset=["year_week"])
+    out = data[["year_week", "week_start", "week_label", "active_users_만", "note"]].drop_duplicates(subset=["year_week"])
     return out.sort_values("week_start").reset_index(drop=True)
 
 
