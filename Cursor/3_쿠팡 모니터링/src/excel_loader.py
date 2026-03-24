@@ -199,19 +199,19 @@ def load_wau_from_excel(path: Path) -> pd.DataFrame:
 def load_payment_df(base_dir: Path, excel_path: str = None) -> pd.DataFrame:
     """설정 또는 기본 경로로 결제액 엑셀 로드 후 주차별 DataFrame 반환."""
     base_dir = Path(base_dir)
-    path = base_dir / (excel_path or "쿠팡 일간 결제액 모니터링.xlsx")
+    path = base_dir / (excel_path or "cp_payment.xlsx")
     return load_payment_from_excel(path)
 
 
 def load_wau_df(base_dir: Path, excel_path: str = None) -> pd.DataFrame:
     """설정 또는 기본 경로로 WAU 엑셀 로드 후 주차별 DataFrame 반환 (Android+IOS만)."""
     base_dir = Path(base_dir)
-    path = base_dir / (excel_path or "쿠팡 WAU 모니터링.xlsx")
+    path = base_dir / (excel_path or "cp_wau.xlsx")
     return load_wau_from_excel(path)
 
 
 def load_payment_daily_df(base_dir: Path, excel_path: str = None, days: int = 30) -> pd.DataFrame:
     """일간 결제 데이터 로드 (최근 days일, 전일대비 증가율 포함)."""
     base_dir = Path(base_dir)
-    path = base_dir / (excel_path or "쿠팡 일간 결제액 모니터링.xlsx")
+    path = base_dir / (excel_path or "cp_payment.xlsx")
     return load_payment_daily_from_excel(path, days=days)

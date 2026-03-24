@@ -168,7 +168,7 @@ def _excel_path(which: str):
     """which: 'payment' | 'wau'"""
     paths = _get_paths()
     name = paths.get("payment_excel") if which == "payment" else paths.get("wau_excel")
-    path = BASE / (name or ("쿠팡 일간 결제액 모니터링.xlsx" if which == "payment" else "쿠팡 WAU 모니터링.xlsx"))
+    path = BASE / (name or ("cp_payment.xlsx" if which == "payment" else "cp_wau.xlsx"))
     return path
 
 
@@ -187,8 +187,8 @@ def api_excel_download(which):
 def api_excel_upload():
     """엑셀 업로드. form 필드: payment (결제액 파일), wau (WAU 파일). 각각 선택 가능."""
     paths = _get_paths()
-    payment_name = paths.get("payment_excel") or "쿠팡 일간 결제액 모니터링.xlsx"
-    wau_name = paths.get("wau_excel") or "쿠팡 WAU 모니터링.xlsx"
+    payment_name = paths.get("payment_excel") or "cp_payment.xlsx"
+    wau_name = paths.get("wau_excel") or "cp_wau.xlsx"
     saved = []
     if "payment" in request.files:
         f = request.files["payment"]

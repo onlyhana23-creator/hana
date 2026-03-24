@@ -42,8 +42,8 @@ def load_config():
 def get_paths(config):
     """데이터 파일 경로. 엑셀 파일명은 config 또는 기본값 사용."""
     paths = (config.get("paths") or {}).copy()
-    paths.setdefault("payment_excel", "쿠팡 일간 결제액 모니터링.xlsx")
-    paths.setdefault("wau_excel", "쿠팡 WAU 모니터링.xlsx")
+    paths.setdefault("payment_excel", "cp_payment.xlsx")
+    paths.setdefault("wau_excel", "cp_wau.xlsx")
     paths.setdefault("news_cache_dir", "data/news_cache")
     result = {}
     for k, v in paths.items():

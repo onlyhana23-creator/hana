@@ -1,5 +1,9 @@
 # config.yaml (config.example.yaml 내용 반영)
 
+paths:
+  payment_excel: cp_payment.xlsx
+  wau_excel: cp_wau.xlsx
+
 naver_search:
   client_id: 'LMeJBlkRuXAJ82cv7gcz'
   client_secret: 'n_IXdooO1z'
